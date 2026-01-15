@@ -1,0 +1,7 @@
+download your "extended streaming history" from https://www.spotify.com/us/account/privacy/ (this will take a few days)
+place the json files* in spotify_data/ (you are here)
+run export_spotify.py
+run import.py spotify_data.txt
+profit
+
+*try to only include Streaming_History_Audio files, Video may cause errors
