@@ -129,25 +129,28 @@ def save_current_line(line_number):
     except IOError as e:
         print(f"Error saving progress to {RESUME_FILE}: {e}")
 
-def scrobble_track(artist, track, album="", timestamp=None):
+def scrobble_track(track_array):
     global SESSION_KEY
     if SESSION_KEY is None:
         print("Error: No session key. Can't scrobble.")
         return None
 
-    if timestamp is None:
-        timestamp = int(time.time())
-
     payload = {
         "method": "track.scrobble",
-        "artist": artist,
-        "track": track,
-        "album": album,
-        "timestamp": timestamp,
         "sk": SESSION_KEY,
         "api_key": API_KEY,
         "format": "json"
     }
+
+    for i, track in enumerate(track_array):
+        timestamp = track["timestamp"]
+        if timestamp is None:
+            timestamp = int(time.time())
+
+        payload[f"timestamp[{i}]"] = str(timestamp)
+        payload[f"track[{i}]"] = track["track"]
+        payload[f"artist[{i}]"] = track["artist"]
+        payload[f"album[{i}]"] = track["album"]
 
     response = None
     try:
@@ -192,6 +195,7 @@ def main():
     try:
         with open(filename, "r", encoding="utf-8") as f:
             current_line_number = 0
+            songs = []
             for line in f:
                 current_line_number += 1
                 if current_line_number < start_line:
@@ -209,14 +213,35 @@ def main():
                     print(f"Warning: Invalid timestamp on line {current_line_number}. Using current time.")
                     timestamp = int(time.time())
 
-                result = scrobble_track(artist, track, album, timestamp)
-                if result:
-                    save_current_line(current_line_number)
-                    print(f"SUCCESS {current_line_number}: {artist} - {track} | response: {result}")
-                else:
-                    print(f"FAIL {current_line_number}: {artist} - {track} | Failed to scrobble.")
+                songs.append({"timestamp": timestamp, "track": track, "artist": artist, "album": album})
 
-                time.sleep(SLEEP_BETWEEN_SCROBBLES)
+                if len(songs) == 50:
+                    result = scrobble_track(songs)
+                    done = False
+                    while not done:
+                        if result:
+                            save_current_line(current_line_number)
+                            print(f"SUCCESS {current_line_number}: {artist} - {track} | response: {result}")
+                            songs = []
+                            done = True
+                        else:
+                            print(f"FAIL {current_line_number}: {artist} - {track} | Failed to scrobble.")
+                            time.sleep(SLEEP_BETWEEN_SCROBBLES)
+
+                    time.sleep(SLEEP_BETWEEN_SCROBBLES)
+
+            if len(songs) > 0:
+                result = scrobble_track(songs)
+                done = False
+                while not done:
+                    if result:
+                        save_current_line(current_line_number)
+                        print(f"SUCCESS {current_line_number}: {artist} - {track} | response: {result}")
+                        done = True
+                    else:
+                        print(f"FAIL {current_line_number}: {artist} - {track} | Failed to scrobble.")
+                        time.sleep(SLEEP_BETWEEN_SCROBBLES)
+
     except FileNotFoundError:
         print(f"File not found: {filename}")
         sys.exit(1)
